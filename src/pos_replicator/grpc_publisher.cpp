@@ -214,19 +214,10 @@ GrpcPublisher::_InsertBlockToChunk(replicator_rpc::CompleteReadRequest* request,
 
     for (uint64_t index = 0; index < numBlocks; index++)
     {
-        char* dataPtr = (char*)data + index * ArrayConfig::SECTOR_SIZE_BYTE;
-        Chunk* chunkPtr = reinterpret_cast<Chunk*>(dataPtr);
-        char lastData = dataPtr[ArrayConfig::SECTOR_SIZE_BYTE];
-        if (index < numBlocks - 1)
-        {
-            dataPtr[ArrayConfig::SECTOR_SIZE_BYTE] = 0;
-        }
         replicator_rpc::Chunk* data = request->add_data();
-        data->set_content((char*)chunkPtr);
-        if (index < numBlocks - 1)
-        {
-            dataPtr[ArrayConfig::SECTOR_SIZE_BYTE] = lastData;
-        }
+
+        char* dataPtr = (char*)data + index * ArrayConfig::SECTOR_SIZE_BYTE;
+        data->set_content(dataPtr, ArrayConfig::SECTOR_SIZE_BYTE);
     }
 }
 } // namespace pos
