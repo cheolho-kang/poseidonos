@@ -36,7 +36,8 @@
 
 #include <thread>
 
-#include "mock_grpc/mock_replicator_server.h"
+#include "test/unit-tests/pos_replicator/mock_grpc/mock_replicator_server.h"
+#include "test/unit-tests/pos_replicator/mock_grpc/mock_replicator_client.h"
 #include "test/unit-tests/master_context/config_manager_mock.h"
 
 using ::testing::_;
@@ -53,38 +54,49 @@ ACTION_P(SetArg2ToStringAndReturn0, stringValue)
 
 class GrpcPublisherTestFixture : public ::testing::Test
 {
+const int CHUNK_SIZE = 512;
 protected:
     void SetUp(void) override;
     void TearDown(void) override;
 
-    MockReplicatorServer* haServer;
-    GrpcPublisher* posClient;
+    void* _GenerateDataBlock(int numChunks);
+
+    GrpcPublisher* grpcPublisher;
     NiceMock<MockConfigManager>* configManager;
+    std::string serverAddress;
 };
 
 void
 GrpcPublisherTestFixture::SetUp(void)
 {
+    serverAddress = std::string("0.0.0.0:0");
     configManager = new NiceMock<MockConfigManager>;
-    ON_CALL(*configManager, GetValue("replicator", "ha_publisher_address", _, _)).WillByDefault(SetArg2ToStringAndReturn0("0.0.0.0:50003"));
-    
-    // new Server : HA side
-    haServer = new MockReplicatorServer();
-    string serverAddress(GRPC_HA_PUB_SERVER_SOCKET_ADDRESS);
-    new std::thread(&MockReplicatorServer::RunServer, haServer, serverAddress);
-    sleep(1);
+    ON_CALL(*configManager, GetValue("replicator", "ha_publisher_address", _, _)).WillByDefault(SetArg2ToStringAndReturn0(serverAddress));
 
-    posClient = new GrpcPublisher(nullptr, configManager);
+    grpcPublisher = new GrpcPublisher(nullptr, configManager);
 }
 
 void
 GrpcPublisherTestFixture::TearDown(void)
 {
     delete configManager;
-    delete haServer;
-    sleep(1);
+    delete grpcPublisher;
+}
 
-    delete posClient;
+void*
+GrpcPublisherTestFixture::_GenerateDataBlock(int numChunks)
+{
+    char * dataBuffer = new char[numChunks * CHUNK_SIZE];
+    for(int chunkIndex = 0; chunkIndex < numChunks; chunkIndex++)
+    {
+        dataBuffer += (CHUNK_SIZE * chunkIndex);
+        for (int offset = 0; offset < CHUNK_SIZE; offset++)
+        {
+            char c = 'A' + std::rand() % 26;
+            dataBuffer[offset] = c;
+        }
+    }
+    return (void*)dataBuffer;
 }
 
 TEST_F(GrpcPublisherTestFixture, DISABLED_GrpcPublisher_PushHostWrite)
@@ -98,7 +110,7 @@ TEST_F(GrpcPublisherTestFixture, DISABLED_GrpcPublisher_PushHostWrite)
     void* buf;
 
     // When
-    int ret = posClient->PushHostWrite(rba, size, volumeName, arrayName, buf, lsn);
+    int ret = grpcPublisher->PushHostWrite(rba, size, volumeName, arrayName, buf, lsn);
 
     // Then: Do Nothing
     EXPECT_EQ(EID(SUCCESS), ret);
@@ -112,7 +124,7 @@ TEST_F(GrpcPublisherTestFixture, DISABLED_GrpcPublisher_CompleteUserWrite)
     string arrayName = "";
 
     // When
-    int ret = posClient->CompleteUserWrite(lsn, volumeName, arrayName);
+    int ret = grpcPublisher->CompleteUserWrite(lsn, volumeName, arrayName);
 
     // Then: Do Nothing
     EXPECT_EQ(EID(SUCCESS), ret);
@@ -126,7 +138,7 @@ TEST_F(GrpcPublisherTestFixture, DISABLED_GrpcPublisher_CompleteWrite)
     string arrayName = "";
 
     // When
-    int ret = posClient->CompleteWrite(lsn, volumeName, arrayName);
+    int ret = grpcPublisher->CompleteWrite(lsn, volumeName, arrayName);
 
     // Then: Do Nothing
     EXPECT_EQ(EID(SUCCESS), ret);
@@ -143,10 +155,29 @@ TEST_F(GrpcPublisherTestFixture, DISABLED_GrpcPublisher_CompleteRead)
     void* buffer = nullptr;
 
     // When
-    int ret = posClient->CompleteRead(arrayName, volumeName, rba, numBlocks, lsn, buffer);
+    int ret = grpcPublisher->CompleteRead(arrayName, volumeName, rba, numBlocks, lsn, buffer);
 
     // Then: Do Nothing
     EXPECT_EQ(EID(SUCCESS), ret);
 }
 
+TEST_F(GrpcPublisherTestFixture, GrpcPublisher_CompleteReadTestIfPublishDataSuccesfully)
+{
+    // Given
+    string arrayName = const_cast<char*>("Arr0");
+    string volumeName = const_cast<char*>("volume1");
+    uint64_t rba = 0;
+    uint64_t numChunks = 8;
+    uint64_t lsn = 10;
+    void* buffer = _GenerateDataBlock(numChunks);
+
+    MockReplicatorServer haServer;
+    new std::thread(&MockReplicatorServer::RunServer, &haServer, serverAddress);
+
+    // When
+    int ret = grpcPublisher->CompleteRead(arrayName, volumeName, rba, numChunks, lsn, buffer);
+
+    // Then: Do Nothing
+    EXPECT_EQ(EID(SUCCESS), ret);
+}
 } // namespace pos
