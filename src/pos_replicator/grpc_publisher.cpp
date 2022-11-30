@@ -45,6 +45,8 @@
 namespace pos
 {
 GrpcPublisher::GrpcPublisher(std::shared_ptr<grpc::Channel> channel_, ConfigManager* configManager)
+: channel(channel_),
+  configManager(configManager)
 {
     std::string serverAddress;
     int ret = configManager->GetValue("replicator", "ha_publisher_address",
