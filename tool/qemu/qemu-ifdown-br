@@ -1,0 +1,16 @@
+#! /bin/sh
+# Script to shut down a network (tap) device for qemu.
+# Initially this script is empty, but you can configure,
+# for example, accounting info here.
+set -x
+switch=br0
+if [ -n "$1" ];then
+        /usr/bin/sudo ip link set $1 down
+        sleep 0.5s
+        /usr/bin/sudo brctl delif $switch $1
+	/usr/bin/sudo ip link delete dev $1
+        exit 0
+else
+        echo "Error: no interface specified"
+        exit 1
+fi
