@@ -312,7 +312,7 @@ PosReplicatorManager::HAWriteCompletion(uint64_t lsn, VolumeIoSmartPtr volumeIo)
         }
     }
 
-    grpcPublisher->CompleteWrite(lsn, volumeName, arrayName);
+    grpcPublisher->CompleteWrite(arrayName, volumeName, volumeIo->GetSectorRba(), numBlocks, lsn);
 }
 
 void

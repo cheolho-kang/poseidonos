@@ -164,15 +164,17 @@ GrpcPublisher::CompleteUserWrite(uint64_t lsn, string volumeName, string arrayNa
 }
 
 int
-GrpcPublisher::CompleteWrite(uint64_t lsn, string volumeName, string arrayName)
+GrpcPublisher::CompleteWrite(string arrayName, string volumeName, uint64_t rba, uint64_t numBlocks, uint64_t lsn)
 {
     ::grpc::ClientContext cliContext;
     replicator_rpc::CompleteWriteRequest* request = new replicator_rpc::CompleteWriteRequest;
     replicator_rpc::CompleteWriteResponse response;
 
-    request->set_lsn(lsn);
     request->set_array_name(arrayName);
     request->set_volume_name(volumeName);
+    request->set_rba(rba);
+    request->set_num_blocks(numBlocks);
+    request->set_lsn(lsn);
 
     grpc::Status status = stub->CompleteWrite(&cliContext, *request, &response);
 
@@ -190,14 +192,24 @@ GrpcPublisher::CompleteRead(string arrayName, string volumeName, uint64_t rba, u
     ::grpc::ClientContext cliContext;
     replicator_rpc::CompleteReadRequest* request = new replicator_rpc::CompleteReadRequest;
     replicator_rpc::CompleteReadResponse response;
+    struct Chunk
+    {
+        char contents[ArrayConfig::BLOCK_SIZE_BYTE];
+    };
 
     request->set_array_name(arrayName);
     request->set_volume_name(volumeName);
     request->set_rba(rba);
     request->set_num_blocks(numBlocks);
 
-    _InsertBlockToChunk(request, buffer, numBlocks);
+    for (uint64_t index = 0; index < numBlocks; index++)
+    {
+        char* dataPtr = (char*)buffer + index * ArrayConfig::BLOCK_SIZE_BYTE;
+        Chunk* chunkPtr = reinterpret_cast<Chunk*>(dataPtr);
 
+        replicator_rpc::Chunk* data = request->add_data();
+        data->set_content((char*)chunkPtr);
+    }
 
     grpc::Status status;
     if (_WaitUntilReady() == true)
@@ -214,22 +226,5 @@ GrpcPublisher::CompleteRead(string arrayName, string volumeName, uint64_t rba, u
         }
     }
     return EID(SUCCESS);
-}
-
-void
-GrpcPublisher::_InsertBlockToChunk(replicator_rpc::CompleteReadRequest* request, void* data, uint64_t numBlocks)
-{
-    struct Chunk
-    {
-        char contents[ArrayConfig::BLOCK_SIZE_BYTE];
-    };
-
-    for (uint64_t index = 0; index < numBlocks; index++)
-    {
-        replicator_rpc::Chunk* data = request->add_data();
-
-        char* dataPtr = (char*)data + index * ArrayConfig::SECTOR_SIZE_BYTE;
-        data->set_content(dataPtr, ArrayConfig::SECTOR_SIZE_BYTE);
-    }
 }
 } // namespace pos
