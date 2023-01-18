@@ -309,7 +309,6 @@ bool
 Copier::_IsAllVictimSegmentCopyDone(void)
 {
     bool ret = meta->IsAllVictimSegmentCopyDone();
-
     return ret;
 }
 
@@ -325,9 +324,9 @@ Copier::_CleanUpVictimSegments(void)
         if (0 == validCount && UNMAP_SEGMENT != victimSegId)
         {
             // Push to free list among the victim lists
-            segmentCtx->MoveToFreeState(victimSegId);
             SegmentContextUpdater* segmentCtxUpdater = (SegmentContextUpdater*)iContextManager->GetSegmentContextUpdaterPtr();
             segmentCtxUpdater->ResetInfos(victimSegId);
+            segmentCtx->MoveToFreeState(victimSegId);
             POS_TRACE_INFO(EID(GC_RELEASE_VICTIM_SEGMENT),
                 "victim_segment_id:{}, count:{}", victimSegId, validCount);
         }

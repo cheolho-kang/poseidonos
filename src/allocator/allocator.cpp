@@ -602,4 +602,9 @@ Allocator::_UnregisterFromAllocatorService(void)
     allocatorService->UnregisterAllocator(arrayName);
 }
 
+AllocatorAddressInfo*
+Allocator::GetAllocatorAddrInfo(void)
+{
+    return addrInfo;
+}
 } // namespace pos

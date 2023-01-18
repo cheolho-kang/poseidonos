@@ -87,6 +87,7 @@ class MetaFsFileControlApi;
 class EventScheduler;
 class TelemetryPublisher;
 class TelemetryClient;
+class AllocatorAddressInfo;
 
 class JournalManager : public IJournalManager
 {
@@ -120,7 +121,7 @@ public:
         ISegmentCtx* segmentCtx, IWBStripeAllocator* wbStripeAllocator,
         IContextManager* contextManager, IContextReplayer* contextReplayer,
         IVolumeInfoManager* volumeManager, MetaFsFileControlApi* metaFsCtrl,
-        EventScheduler* eventScheduler, TelemetryClient* tc);
+        EventScheduler* eventScheduler, TelemetryClient* tc, AllocatorAddressInfo* addrInfo);
 
     virtual void Dispose(void);
     virtual void Shutdown(void);
@@ -144,7 +145,7 @@ protected:
         IStripeMap* stripeMap, IMapFlush* mapFlush,
         ISegmentCtx* segmentCtx, IWBStripeAllocator* wbStripeAllocator,
         IContextManager* contextManager, IContextReplayer* contextReplayer,
-        IVolumeInfoManager* volumeManager, EventScheduler* eventScheduler);
+        IVolumeInfoManager* volumeManager, EventScheduler* eventScheduler, AllocatorAddressInfo* addrInfo);
     void _DisposeModules(void);
     void _ResetModules(void);
 

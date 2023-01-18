@@ -182,7 +182,7 @@ TEST_F(JournalManagerTestFixture, Init_testWithJournalDisabled)
 
     // When: Journal is initialized
     ASSERT_TRUE(journal->Init(nullptr, nullptr, nullptr, nullptr,
-                    nullptr, contextManager, nullptr, nullptr, nullptr, nullptr, nullptr) == 0);
+                    nullptr, contextManager, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr) == 0);
 
     // Then: Journal should be initialized with INVALID state
     EXPECT_TRUE(journal->GetJournalManagerStatus() == JOURNAL_INVALID);
@@ -221,7 +221,7 @@ TEST_F(JournalManagerTestFixture, Init_testWithJournalEnabledAndLogBufferNotExis
 
     // When: Journal is initialized
     ASSERT_TRUE(journal->Init(nullptr, nullptr, nullptr, nullptr,
-                    nullptr, contextManager, nullptr, nullptr, nullptr, nullptr, tc) == 0);
+                    nullptr, contextManager, nullptr, nullptr, nullptr, nullptr, tc, nullptr) == 0);
 
     // Then: Journal manager should be ready
     EXPECT_TRUE(journal->GetJournalManagerStatus() == JOURNALING);
@@ -261,7 +261,7 @@ TEST_F(JournalManagerTestFixture, Init_testWithJournalEnabledAndLogBufferExist)
 
     // When: Journal is initialized
     ASSERT_TRUE(journal->Init(nullptr, nullptr, nullptr, nullptr,
-                    nullptr, contextManager, nullptr, nullptr, nullptr, nullptr, tc) == 0);
+                    nullptr, contextManager, nullptr, nullptr, nullptr, nullptr, tc, nullptr) == 0);
 
     // Then: Journal manager should be ready
     EXPECT_TRUE(journal->GetJournalManagerStatus() == JOURNALING);
@@ -279,7 +279,7 @@ TEST_F(JournalManagerTestFixture, Init_testIfFailedToOpenLogBuffer)
 
     // Then: JournalManager return the error code
     int actualReturnCode = journal->Init(nullptr, nullptr, nullptr, nullptr,
-        nullptr, contextManager, nullptr, nullptr, nullptr, nullptr, tc);
+        nullptr, contextManager, nullptr, nullptr, nullptr, nullptr, tc, nullptr);
     EXPECT_EQ(expectReturnCode, actualReturnCode);
 }
 
@@ -296,7 +296,7 @@ TEST_F(JournalManagerTestFixture, Init_testIfJournalEnabledOptionIsChanged)
 
     // Then: Journal manager bypass the process of replay
     int actualReturnCode = journal->Init(nullptr, nullptr, nullptr, nullptr,
-        nullptr, contextManager, nullptr, nullptr, nullptr, nullptr, tc);
+        nullptr, contextManager, nullptr, nullptr, nullptr, nullptr, tc, nullptr);
     int expectReturnCode = 0;
 
     EXPECT_EQ(expectReturnCode, actualReturnCode);
@@ -329,7 +329,7 @@ TEST_F(JournalManagerTestFixture, Init_testIfReplayFailed)
     EXPECT_CALL(*replayHandler, Start).WillOnce(Return(-1));
 
     int actualReturnCode = journal->Init(nullptr, nullptr, nullptr, nullptr,
-        nullptr, contextManager, nullptr, nullptr, nullptr, nullptr, tc);
+        nullptr, contextManager, nullptr, nullptr, nullptr, nullptr, tc, nullptr);
 
     // Then: Journal manager should be return the error code to indicate that replay is failed
     int expectedReturnCode = ERRID(JOURNAL_REPLAY_FAILED);
@@ -389,7 +389,7 @@ TEST_F(JournalManagerTestFixture, Init_testInitWhenLogBufferNotExist)
 
     // When: Journal is initialized
     ASSERT_TRUE(journal->Init(nullptr, nullptr, nullptr, nullptr,
-                    nullptr, contextManager, nullptr, nullptr, nullptr, nullptr, tc) == 0);
+                    nullptr, contextManager, nullptr, nullptr, nullptr, nullptr, tc, nullptr) == 0);
 
     // Then: Journal manager should be ready
     EXPECT_TRUE(journal->GetJournalManagerStatus() == JOURNALING);
@@ -409,7 +409,7 @@ TEST_F(JournalManagerTestFixture, Init_testInitWhenLogBufferLoaded)
 
     // When: Journal is initialized
     ASSERT_TRUE(journal->Init(nullptr, nullptr, nullptr, nullptr,
-                    nullptr, contextManager, nullptr, nullptr, nullptr, nullptr, tc) == 0);
+                    nullptr, contextManager, nullptr, nullptr, nullptr, nullptr, tc, nullptr) == 0);
 
     // Then: Journal manager should be ready
     EXPECT_TRUE(journal->GetJournalManagerStatus() == JOURNALING);
