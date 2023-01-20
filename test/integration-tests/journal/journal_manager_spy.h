@@ -46,6 +46,7 @@ public:
     uint64_t GetNextOffset(void);
     IJournalWriter* GetJournalWriter(void);
     IJournalStatusProvider* GetStatusProvider(void);
+    LogGroupReleaser* GetLogGroupReleaser(void);
 
 private:
     int _GetLogsFromBuffer(LogList& logList);

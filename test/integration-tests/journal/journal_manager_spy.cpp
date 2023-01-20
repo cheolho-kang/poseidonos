@@ -243,4 +243,10 @@ JournalManagerSpy::GetStatusProvider(void)
     return statusProvider;
 }
 
+LogGroupReleaser*
+JournalManagerSpy::GetLogGroupReleaser(void)
+{
+    return logGroupReleaser;
+}
+
 } // namespace pos

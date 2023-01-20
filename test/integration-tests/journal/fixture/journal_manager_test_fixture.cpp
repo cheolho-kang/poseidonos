@@ -103,6 +103,19 @@ JournalManagerTestFixture::SimulateSPORWithoutRecovery(void)
 }
 
 void
+JournalManagerTestFixture::SimulateSPORWithoutRecovery(JournalConfigurationBuilder& configurationBuilder)
+{
+    delete journal;
+
+    telemetryPublisher = new NiceMock<MockTelemetryPublisher>;
+    journal = new JournalManagerSpy(telemetryPublisher, arrayInfo, stateSub, GetLogFileName());
+    journal->ResetJournalConfiguration(configurationBuilder.Build());
+    writeTester->UpdateJournal(journal);
+
+    journal->InitializeForTest(telemetryClient, testMapper, testAllocator, volumeManager);
+}
+
+void
 JournalManagerTestFixture::SimulateRocksDBSPORWithoutRecovery(void)
 {
     JournalConfigurationBuilder configurationBuilder(testInfo);

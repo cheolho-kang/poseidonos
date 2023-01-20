@@ -25,6 +25,7 @@ public:
 
     void ExpectReplayOverwrittenBlockLog(StripeTestFixture stripe);
     void ExpectReplayFullStripe(StripeTestFixture stripe);
+    void ExpectReplayFullStripeWithAlreadyUpdatedSegmentContext(StripeTestFixture stripe);
 
     void ExpectReplayUnflushedActiveStripe(VirtualBlkAddr tail, StripeTestFixture stripe);
     void ExpectReplayFlushedActiveStripe(void);

@@ -4,6 +4,7 @@
 #include "test/integration-tests/journal/fixture/journal_manager_test_fixture.h"
 #include "test/integration-tests/journal/utils/used_offset_calculator.h"
 #include "src/journal_manager/log/log_event.h"
+#include "src/allocator/include/allocator_const.h"
 
 using ::testing::_;
 using ::testing::AtLeast;
@@ -21,6 +22,9 @@ public:
 protected:
     virtual void SetUp(void);
     virtual void TearDown(void);
+
+    uint64_t _CalculateLogBufferSize(uint32_t numStripes, uint32_t numBlockMapLogsInStripe);
+    void _IncreaseOffsetIfOverMpageSize(uint64_t& nextOffset, uint64_t logSize);
 };
 
 ReplayLogBufferIntegrationTest::ReplayLogBufferIntegrationTest(void)
@@ -36,6 +40,37 @@ ReplayLogBufferIntegrationTest::SetUp(void)
 void
 ReplayLogBufferIntegrationTest::TearDown(void)
 {
+}
+
+void
+ReplayLogBufferIntegrationTest::_IncreaseOffsetIfOverMpageSize(uint64_t& nextOffset, uint64_t logSize)
+{
+    uint64_t currentMetaPage = nextOffset / testInfo->metaPageSize;
+    uint64_t endMetaPage = (nextOffset + logSize - 1) / testInfo->metaPageSize;
+    if (currentMetaPage != endMetaPage)
+    {
+        nextOffset = endMetaPage * testInfo->metaPageSize;
+    }
+}
+
+uint64_t
+ReplayLogBufferIntegrationTest::_CalculateLogBufferSize(uint32_t numStripes, uint32_t numBlockMapLogsInStripe)
+{
+    uint64_t nextOffset = 0;
+
+    for (uint32_t stripeIndex = 0; stripeIndex < numStripes; stripeIndex++)
+    {
+        for (uint32_t blockIndex = 0; blockIndex < numBlockMapLogsInStripe; blockIndex++)
+        {
+            _IncreaseOffsetIfOverMpageSize(nextOffset, sizeof(BlockWriteDoneLog));
+            nextOffset += sizeof(BlockWriteDoneLog);
+        }
+        _IncreaseOffsetIfOverMpageSize(nextOffset, sizeof(StripeMapUpdatedLog));
+        nextOffset += sizeof(StripeMapUpdatedLog);
+    }
+
+    nextOffset += sizeof(LogGroupFooter);
+    return nextOffset;
 }
 
 TEST_F(ReplayLogBufferIntegrationTest, ReplayFullLogBuffer)
@@ -132,5 +167,96 @@ TEST_F(ReplayLogBufferIntegrationTest, ReplayCirculatedLogBuffer)
     replayTester->ExpectReplayFlushedActiveStripe();
 
     EXPECT_TRUE(journal->DoRecoveryForTest() == 0);
+}
+
+TEST_F(ReplayLogBufferIntegrationTest, ReplayFullLogBufferWhenSegmentContextFlushedAndVSAMapNotFlushedDuringCheckpoint)
+{
+    POS_TRACE_DEBUG(9999, "ReplayLogBufferIntegrationTest::ReplayFullLogBufferWhenSegmentContextFlushedAndVSAMapNotFlushedDuringCheckpoint");
+
+    uint32_t numSegments = 1;
+    uint32_t numStripes = testInfo->numStripesPerSegment * numSegments;
+    uint64_t sizeLogGroupAlignByMpage = _CalculateLogBufferSize(numStripes / 2 , 8);
+    JournalConfigurationBuilder builder(testInfo);
+    builder.SetJournalEnable(true)
+        ->SetLogBufferSize(sizeLogGroupAlignByMpage * 2);
+
+    InitializeJournal(builder.Build());
+    SetTriggerCheckpoint(false);
+    uint32_t stripeIndex = 0;
+    std::vector<StripeTestFixture> writtenStripesForLogGoup0;
+    for (stripeIndex = 0; stripeIndex < numStripes / 2; stripeIndex++)
+    {
+        StripeTestFixture stripe(stripeIndex, testInfo->defaultTestVol);
+        writeTester->GenerateLogsForStripe(stripe, 0, testInfo->numBlksPerStripe);
+        writeTester->WriteLogsForStripe(stripe);
+        writtenStripesForLogGoup0.push_back(stripe);
+    }
+
+    std::vector<StripeTestFixture> writtenStripesForLogGoup1BeforeCheckpoint;
+    for (uint32_t index = 0; index < 10; index++, stripeIndex++)
+    {
+        StripeTestFixture stripe(stripeIndex, testInfo->defaultTestVol);
+        writeTester->GenerateLogsForStripe(stripe, 0, testInfo->numBlksPerStripe);
+        writeTester->WriteLogsForStripe(stripe);
+        writtenStripesForLogGoup1BeforeCheckpoint.push_back(stripe);
+    }
+    std::vector<StripeTestFixture> writtenStripesForLogGoup1AfterCheckpoint;
+    for (uint32_t index = 0; index < numStripes / 2 - 10; index++, stripeIndex++)
+    {
+        StripeTestFixture stripe(stripeIndex, testInfo->defaultTestVol);
+        writeTester->GenerateLogsForStripe(stripe, 0, testInfo->numBlksPerStripe);
+        writeTester->WriteLogsForStripe(stripe);
+        writtenStripesForLogGoup1AfterCheckpoint.push_back(stripe);
+    }
+    writeTester->WaitForAllLogWriteDone();
+
+    uint64_t latestContextVersion = 1;
+    EXPECT_CALL(*(testAllocator->GetIContextManagerMock()), GetStoredContextVersion(SEGMENT_CTX))
+        .WillOnce(Return(0))
+        .WillRepeatedly(Return(1));
+
+    EXPECT_CALL(*testMapper, FlushDirtyMpages).Times(1);
+    ON_CALL(*testMapper, FlushDirtyMpages).WillByDefault([&](int volId, EventSmartPtr event) {
+        ((LogGroupReleaserSpy*)(journal->GetLogGroupReleaser()))->ForceCompleteCheckpoint();
+        return -1;
+    });
+    journal->StartCheckpoint();
+
+    WaitForAllCheckpointDone();
+    SimulateSPORWithoutRecovery(builder);
+
+    int64_t actualValidCount = numStripes * testInfo->numBlksPerStripe / 2;
+    ON_CALL(*(testAllocator->GetISegmentCtxMock()), ValidateBlks).WillByDefault([&](VirtualBlks blks) {
+        actualValidCount++;
+        return true;
+    });
+    ON_CALL(*(testAllocator->GetISegmentCtxMock()), InvalidateBlks).WillByDefault([&](VirtualBlks blks, bool isForced) {
+        actualValidCount--;
+        return true;
+    });
+
+    replayTester->ExpectReturningUnmapStripes();
+    for (auto stripeLog : writtenStripesForLogGoup0)
+    {
+        replayTester->ExpectReplayFullStripeWithAlreadyUpdatedSegmentContext(stripeLog);
+    }
+    for (auto stripeLog : writtenStripesForLogGoup1BeforeCheckpoint)
+    {
+        replayTester->ExpectReplayFullStripe(stripeLog);
+    }
+    for (auto stripeLog : writtenStripesForLogGoup1AfterCheckpoint)
+    {
+        replayTester->ExpectReplayFullStripe(stripeLog);
+    }
+
+    /*
+    ResetActiveStripeTail
+    ReplaySsdLsid
+    ReplayStripeFlushed
+    ReplayStripeRelease
+    */
+    EXPECT_TRUE(journal->DoRecoveryForTest() == 0);
+    int64_t expectedValidCount = numStripes * testInfo->numBlksPerStripe;
+    EXPECT_EQ(expectedValidCount, actualValidCount);
 }
 } // namespace pos
